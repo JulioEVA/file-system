@@ -1,52 +1,104 @@
 package itson.distribuidos;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.io.File;
-import java.io.FileInputStream;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 public class Client {
     public static void main(String[] args) {
-        final int SERVER_PORT = 5000;
-        byte[] buffer = new byte[1024];
+        File[] fileToSend = new File[1];
 
-        try {
+        JFrame jFrame = new JFrame("File Client");
+        jFrame.setSize(450, 450);
+        jFrame.setLayout(new BoxLayout(jFrame.getContentPane(), BoxLayout.Y_AXIS));
+        jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-            InetAddress serverAddress = InetAddress.getByName("localhost");
-            DatagramSocket udpSocket = new DatagramSocket();
+        JLabel jlTItle = new JLabel("File Sender");
+        jlTItle.setFont(new Font("Arial", Font.BOLD, 25));
+        jlTItle.setBorder(new EmptyBorder(20, 0, 10, 0));
+        jlTItle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            // Read file into byte array
-            File file = new File("src/main/resources/lorem.txt");
-            FileInputStream fis = new FileInputStream(file);
-            fis.read(buffer);
-            fis.close();
+        JLabel jlFileName = new JLabel("File to send:");
+        jlFileName.setFont(new Font("Arial", Font.BOLD, 15));
+        jlFileName.setBorder(new EmptyBorder(50, 0, 10, 0));
+        jlFileName.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            // Send file to server
-            System.out.println("Sending file to server");
-            DatagramPacket request = new DatagramPacket(buffer, buffer.length, serverAddress, SERVER_PORT);
-            udpSocket.send(request);
+        JPanel jpButton = new JPanel();
+        jpButton.setBorder(new EmptyBorder(75, 0, 0, 0));
 
-            // Receive response from server
-            DatagramPacket response = new DatagramPacket(buffer, buffer.length);
-            System.out.println("Waiting for response");
-            udpSocket.receive(response);
-            System.out.println("Received message from server:");
-            System.out.println(response.getData());
+        JButton jbSendFile = new JButton("Send file");
+        jbSendFile.setPreferredSize(new Dimension(150, 75));
+        jbSendFile.setFont(new Font("Arial", Font.BOLD, 20));
 
-            udpSocket.close();
+        JButton jbChooseFile = new JButton("Select file");
+        jbChooseFile.setPreferredSize(new Dimension(150, 75));
+        jbChooseFile.setFont(new Font("Arial", Font.BOLD, 20));
 
-        } catch (SocketException e) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, e);
-        } catch (UnknownHostException e) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, e);
-        } catch (IOException e) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, e);
-        }
+        jpButton.add(jbSendFile);
+        jpButton.add(jbChooseFile);
+
+        jbChooseFile.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                JFileChooser jFileChooser = new JFileChooser();
+                jFileChooser.setDialogTitle("Select a file to send");
+                if (jFileChooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+                    fileToSend[0] = jFileChooser.getSelectedFile();
+                    jlFileName.setText("File to send: " + fileToSend[0].getName());
+                }
+            }
+        });
+
+        jbSendFile.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fileToSend[0] != null) {
+                    try (FileInputStream fileInputStream = new FileInputStream(fileToSend[0].getAbsolutePath())) {
+                        InetAddress serverAddress = InetAddress.getByName("localhost");
+                        int serverPort = 5000;
+
+                        int bufferSize = 1024;
+                        byte[] buffer = new byte[bufferSize];
+
+                        try (DatagramSocket udpSocket = new DatagramSocket()) {
+                            // Read file name
+                            String fileName = fileToSend[0].getName();
+                            byte[] fileNameBytes = fileName.getBytes();
+
+                            // Create and send packet containing file name
+                            DatagramPacket fileNamePacket = new DatagramPacket(fileNameBytes, fileNameBytes.length,
+                                    serverAddress, serverPort);
+                            udpSocket.send(fileNamePacket);
+
+                            // Read file content and send in chunks
+                            int bytesRead;
+                            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+                                DatagramPacket contentPacket = new DatagramPacket(buffer, bytesRead, serverAddress,
+                                        serverPort);
+                                udpSocket.send(contentPacket);
+                            }
+                        }
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                } else {
+                    jlFileName.setText("Please select a file to send");
+                }
+            }
+        });
+
+        jFrame.add(jlTItle);
+        jFrame.add(jlFileName);
+        jFrame.add(jpButton);
+        jFrame.setVisible(true);
     }
 }
